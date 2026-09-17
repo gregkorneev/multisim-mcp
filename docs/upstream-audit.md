@@ -46,6 +46,17 @@ below.
 | Tests/packaging | Extensive unittest/pytest-style COM-free suite under `mcp_server/tests`; E2E script exists but needs local fixture and x86 Python. `pyproject.toml` produces PyPI package; GitHub Actions already exist upstream. |
 | Codex setup | `tools/generate_agent_config.py` emits a Codex config using `python -m multisim_mcp.cli serve`; worker path can be separately configured. |
 
+### Checks run for this audit
+
+Using the bundled 64-bit Python 3.12 runtime with `PYTHONPATH=mcp_server`, the
+COM-free unittest subset passed: `test_layout_validation`,
+`test_virtual_instruments`, `test_tool_profiles`, and
+`test_component_adapters` — **22 tests, 0 failures**. `pytest` itself is not
+bundled in that runtime, so the equivalent `unittest` entry point was used.
+This verifies routing/layout validation, data-derived instruments, tool-profile
+catalog completeness and component-adapter behavior; it does not verify COM,
+codec or user-local templates.
+
 ## Available MCP tools
 
 `COM` means the request reaches the isolated worker; `XML` means local
