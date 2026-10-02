@@ -189,6 +189,12 @@ signatures while execution is migrated behind this boundary.
 
 ## Install
 
+Windows users can run `install-windows.bat` from the repository root to install
+Python x86, Node.js LTS, MCP dependencies, and the pinned codec, then prepare a
+Codex configuration fragment and local Multisim templates. See the
+[Russian installation guide](../docs/INSTALL_WINDOWS_RU.md). Licensed NI Multisim
+and Codex are installed separately.
+
 Requirements:
 
 - Windows and a licensed Multisim 14+ installation.

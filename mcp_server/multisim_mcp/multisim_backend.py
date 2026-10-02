@@ -188,6 +188,11 @@ class MultisimBackend:
             if request.render_image
             else None
         )
+        geometry_hints: dict[str, Any] = {}
+        if request.component_placements:
+            geometry_hints["component_placements"] = request.component_placements
+        if request.wire_waypoints:
+            geometry_hints["wire_waypoints"] = request.wire_waypoints
         result = self._schematic_executor(
             netlist,
             str(ms14),
@@ -196,6 +201,7 @@ class MultisimBackend:
             open_after_build=request.open_after_build,
             image_path=str(image) if image else None,
             overwrite=request.overwrite,
+            **geometry_hints,
         )
         success = result.get("success") is True
         paths = [ms14, Path(str(ms14) + ".xml")]

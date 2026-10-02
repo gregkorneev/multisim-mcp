@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:multisim-mcp:circuitspec:0.1",
+  "title": "CircuitSpec 0.1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "components", "nets"],
+  "properties": {
+    "schema_version": {"const": "0.1"},
+    "title": {"type": "string", "minLength": 1, "maxLength": 200},
+    "units": {
+      "type": "object", "additionalProperties": false,
+      "properties": {"length": {"const": "multisim-grid"}, "value": {"const": "SI"}},
+      "required": ["length", "value"]
+    },
+    "components": {
+      "type": "array", "minItems": 1, "maxItems": 512,
+      "items": {"$ref": "#/$defs/component"}
+    },
+    "nets": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/net"}},
+    "connections": {"type": "array", "items": {"$ref": "#/$defs/connection"}},
+    "junctions": {"type": "array", "maxItems": 0},
+    "wire_waypoints": {
+      "type": "array", "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["net", "points"],
+        "properties": {
+          "net": {"type": "string"},
+          "points": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/point"}}
+        }
+      }
+    },
+    "uncertainties": {
+      "type": "array", "items": {"$ref": "#/$defs/uncertainty"}
+    }
+  },
+  "$defs": {
+    "component": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "type"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,31}$"},
+        "type": {"enum": ["resistor", "capacitor", "inductor", "dc_voltage_source", "dc_current_source", "diode", "npn_bjt", "pnp_bjt", "ideal_opamp", "ground"]},
+        "value": {"type": "string", "minLength": 1, "maxLength": 64},
+        "model": {"type": "string", "minLength": 1, "maxLength": 128},
+        "terminals": {
+          "type": "object",
+          "propertyNames": {"enum": ["1", "2", "positive", "negative", "anode", "cathode", "collector", "base", "emitter", "input_positive", "input_negative", "positive_supply", "negative_supply", "output"]},
+          "properties": {
+            "1": {"type": "string"}, "2": {"type": "string"},
+            "positive": {"type": "string"}, "negative": {"type": "string"},
+            "anode": {"type": "string"}, "cathode": {"type": "string"},
+            "collector": {"type": "string"}, "base": {"type": "string"},
+            "emitter": {"type": "string"}, "input_positive": {"type": "string"},
+            "input_negative": {"type": "string"}, "positive_supply": {"type": "string"},
+            "negative_supply": {"type": "string"}, "output": {"type": "string"}
+          },
+          "additionalProperties": false
+        },
+        "position": {"$ref": "#/$defs/point"},
+        "rotation": {"enum": [0, 90, 180, 270]},
+        "mirror": {"type": "boolean"},
+        "polarity": {"type": "object", "additionalProperties": false, "properties": {"positive_terminal": {"const": "positive"}}}
+      }
+      ,
+      "allOf": [
+        {
+          "if": {"properties": {"type": {"enum": ["resistor", "capacitor", "inductor", "dc_voltage_source", "dc_current_source"]}}},
+          "then": {"required": ["value"]}
+        },
+        {
+          "if": {"properties": {"type": {"enum": ["diode", "npn_bjt", "pnp_bjt"]}}},
+          "then": {"required": ["model"]}
+        },
+        {
+          "if": {"properties": {"type": {"const": "ground"}}},
+          "then": {"not": {"required": ["value"]}}
+        }
+      ]
+    },
+    "net": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "terminals"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^(0|[A-Za-z][A-Za-z0-9_-]{0,31})$"},
+        "terminals": {"type": "array", "minItems": 2, "items": {"type": "string"}}
+      }
+    },
+    "connection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["net", "from", "to"],
+      "properties": {"net": {"type": "string"}, "from": {"type": "string"}, "to": {"type": "string"}}
+    },
+    "point": {
+      "type": "object", "additionalProperties": false,
+      "required": ["x", "y"], "properties": {"x": {"type": "number"}, "y": {"type": "number"}}
+    },
+    "uncertainty": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "reason"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "reason": {"type": "string", "minLength": 1},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "resolved": {"type": "boolean"}
+      }
+    }
+  }
+}

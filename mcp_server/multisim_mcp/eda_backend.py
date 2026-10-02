@@ -190,6 +190,8 @@ class SchematicRequest:
     include_experimental_probes: bool = False
     probe_nets: tuple[str, ...] = ()
     overwrite: bool = False
+    component_placements: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
+    wire_waypoints: Mapping[str, tuple[tuple[float, float], ...]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not isinstance(self.design, CircuitDesign):
@@ -218,6 +220,8 @@ class SchematicRequest:
             "probe_nets",
             tuple(_require_text(net, "probe net", maximum=255) for net in self.probe_nets),
         )
+        if not isinstance(self.component_placements, Mapping) or not isinstance(self.wire_waypoints, Mapping):
+            raise ValueError("component_placements and wire_waypoints must be objects")
         for name in (
             "render_image",
             "open_after_build",

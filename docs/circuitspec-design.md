@@ -107,6 +107,99 @@ different topology.
 4. `feature/visual-verification`: capture and compare schematic image,
    topology and layout report after open/save/reopen.
 
+## Implementation tasks
+
+These tasks implement the Codex-hosted image flow above. Codex receives the
+image and produces CircuitSpec; MCP validates and builds it. Image upload,
+OCR/CV, and a vision model are outside the MCP server.
+
+### MVP: hand-drawn passive circuits
+
+- [ ] **IMG-01 — Freeze the CircuitSpec v0.1 contract.** Specify required and
+  optional fields, terminal naming, engineering-value syntax, diagnostics, and
+  how Codex reports uncertainty. Keep the scope to R/C/L, DC voltage/current
+  sources, and ground.
+  **Done when:** a versioned JSON Schema and representative valid/invalid
+  fixtures cover missing values, unknown types, duplicate IDs, dangling pins,
+  conflicting net membership, and ambiguous connectivity.
+
+- [ ] **IMG-02 — Validate CircuitSpec and resolve component terminals.** Add a
+  versioned component registry and a pure-Python validator that normalizes
+  supported names and values without touching Multisim or the filesystem.
+  **Done when:** validation returns a normalized spec plus actionable errors;
+  unknown component types and terminal names fail closed.
+  **Depends on:** IMG-01.
+
+- [ ] **IMG-03 — Compile validated specs to SPICE.** Convert the MVP component
+  set and net membership into deterministic SPICE using the existing circuit
+  model where possible.
+  **Done when:** fixtures compile to stable netlists, round-trip connectivity
+  checks pass, and unsupported constructs return diagnostics instead of a
+  guessed netlist.
+  **Depends on:** IMG-02.
+
+- [ ] **IMG-04 — Expose `validate_circuit` to Codex.** Register a pure MCP tool
+  that accepts CircuitSpec and returns normalized data, diagnostics, and a
+  SPICE preview. Add it to the relevant tool profiles and describe when Codex
+  must ask the user to clarify the image.
+  **Done when:** a stdio MCP call validates a fixture without invoking COM or
+  writing files; the tool is visible in supported profiles.
+  **Depends on:** IMG-02, IMG-03.
+
+- [ ] **IMG-05 — Build a Multisim circuit from approved CircuitSpec.** Add
+  `create_circuit` as a thin adapter to the existing schematic builder and
+  approval flow. Save the input spec, resolved mapping, generated netlist, and
+  validation evidence with the `.ms14` output.
+  **Done when:** a validated MVP fixture creates a native project through the
+  existing pipeline; unsupported input cannot create or overwrite artifacts.
+  **Depends on:** IMG-03, IMG-04.
+
+- [ ] **IMG-06 — Verify the generated circuit against its source spec.** Compare
+  expected component references and net topology with Multisim's exported
+  evidence after opening the project; include the rendered schematic image in
+  the result.
+  **Done when:** missing components or changed connectivity fail the build, and
+  a passing result includes both topology evidence and the schematic artifact.
+  **Depends on:** IMG-05; run the native gate on Windows with licensed
+  Multisim and the local template pack.
+
+- [ ] **IMG-07 — Add the Codex image-to-CircuitSpec workflow.** Update the
+  project skill/prompt with a compact output contract: transcribe only visible
+  evidence, mark uncertain values and junctions, ask before building when
+  ambiguity changes connectivity, then call `validate_circuit` and
+  `create_circuit` after confirmation.
+  **Done when:** documented examples cover a clear photo, unreadable value,
+  ambiguous wire crossing, and unsupported component; no image bytes are sent
+  to MCP.
+  **Depends on:** IMG-01, IMG-04, IMG-05.
+
+### Follow-up
+
+- [ ] **IMG-08 — Add placement and orientation hints.** Extend the builder API
+  for explicitly supplied positions, rotation, mirror, and wire waypoints while
+  preserving automatic routing when hints are absent.
+  **Done when:** geometry validation rejects pins inside component bodies,
+  non-orthogonal routes, and conflicting transforms; existing netlist-only
+  builds retain their current layout.
+  **Depends on:** IMG-05.
+
+- [ ] **IMG-09 — Expand the image workflow to additional component families.**
+  Add each family only with registry pin maps and builder templates verified
+  against native Multisim evidence; keep unsupported or unreadable parts
+  explicit in validation results.
+  **Done when:** each added family has fixtures for pin order, value/model
+  mapping, generated topology, and a native open/export regression.
+  **Depends on:** IMG-06.
+
+- [ ] **IMG-10 — Maintain a visual-to-electrical regression set.** Add synthetic
+  or redistributable schematic images paired with hand-checked CircuitSpec
+  fixtures. Use these to review Codex extraction quality; keep the MCP tests
+  focused on CircuitSpec validation and build results.
+  **Done when:** every fixture has expected components, terminals, nets, and
+  explicitly marked ambiguities; no unlicensed or private user photos are
+  checked in.
+  **Depends on:** IMG-01, IMG-07.
+
 ## Image workflow
 
 ```text

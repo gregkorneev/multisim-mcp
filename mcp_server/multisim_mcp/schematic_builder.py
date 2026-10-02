@@ -1748,6 +1748,30 @@ def _transform_point(element: ET.Element, x: float, y: float, *, translation: bo
             x * value('M01', '0') + y * value('M11', '1') + (value('M21', '0') if translation else 0))
 
 
+def _compose_symbol_orientation(symbol: ET.Element, rotation: int, mirror: bool) -> None:
+    """Apply a user rotation/reflection on top of the template's orientation."""
+    angle = math.radians(rotation)
+    cosine, sine = round(math.cos(angle)), round(math.sin(angle))
+    rotate = ((cosine, -sine), (sine, cosine))
+    reflect = ((-1, 0), (0, 1)) if mirror else ((1, 0), (0, 1))
+    user = tuple(
+        tuple(sum(rotate[row][k] * reflect[k][column] for k in range(2)) for column in range(2))
+        for row in range(2)
+    )
+    old = (
+        (float(symbol.get("Transformer-M00", "1")), float(symbol.get("Transformer-M10", "0"))),
+        (float(symbol.get("Transformer-M01", "0")), float(symbol.get("Transformer-M11", "1"))),
+    )
+    matrix = tuple(
+        tuple(sum(user[row][k] * old[k][column] for k in range(2)) for column in range(2))
+        for row in range(2)
+    )
+    symbol.set("Transformer-M00", f"{matrix[0][0]:g}")
+    symbol.set("Transformer-M10", f"{matrix[0][1]:g}")
+    symbol.set("Transformer-M01", f"{matrix[1][0]:g}")
+    symbol.set("Transformer-M11", f"{matrix[1][1]:g}")
+
+
 def _symbol_pin_info(symbol_item: ET.Element) -> dict[str, dict[str, Any]]:
     info: dict[str, dict[str, Any]] = {}
     for pin_item in symbol_item.findall(
@@ -2918,6 +2942,9 @@ def build_schematic(
     output_path: str | Path,
     template_path: str | Path | None = None,
     probe_nets: list[str] | None = None,
+    *,
+    component_placements: dict[str, dict[str, Any]] | None = None,
+    wire_waypoints: dict[str, list[tuple[float, float]]] | None = None,
 ) -> dict[str, Any]:
     """Build an editable Multisim XML design from a simple SPICE netlist.
 
@@ -2926,6 +2953,8 @@ def build_schematic(
     disable probes.
     """
     parsed = parse_netlist(netlist)
+    component_placements = component_placements or {}
+    wire_waypoints = wire_waypoints or {}
     inductor_refs = {
         spec.refdes.lower() for spec in parsed.components if spec.kind == "L"
     }
@@ -2982,6 +3011,10 @@ def build_schematic(
         component_index: rank
         for rank, component_index in enumerate(_component_placement_order(specs))
     }
+    known_refs = {spec.refdes for spec in specs if spec.kind != "GND"}
+    unknown_placements = set(component_placements) - known_refs
+    if unknown_placements:
+        raise ValueError(f"component placements reference unknown components: {sorted(unknown_placements)}")
     simple_profile = _simple_analog_profile(specs)
     opamp_profile = _opamp_profile(specs)
     ce_profile = _common_emitter_profile(specs)
@@ -3060,6 +3093,9 @@ def build_schematic(
             x, y = ce_profile['positions'][spec.refdes]
         elif rectifier_profile:
             x, y = rectifier_profile['positions'][spec.refdes]
+        placement = component_placements.get(spec.refdes, {})
+        if placement:
+            x, y = float(placement.get("x", x)), float(placement.get("y", y))
         max_component_x = max(max_component_x, x + 126)
         max_component_y = max(max_component_y, y + 108)
         placements.append({"refdes": spec.refdes, "kind": spec.kind, "x": x, "y": y})
@@ -3118,6 +3154,8 @@ def build_schematic(
             rotation = {'M00':'-1','M01':'0','M10':'0','M11':'-1'} if spec.kind == 'D' else {'M00':'0','M01':'-1','M10':'1','M11':'0'} if spec.kind == 'C' else {'M00':'0','M01':'1','M10':'-1','M11':'0'}
             for key,value in rotation.items():
                 sym.set('Transformer-'+key,value)
+        if placement and (placement.get("rotation", 0) or placement.get("mirror", False)):
+            _compose_symbol_orientation(sym, int(placement.get("rotation", 0)), bool(placement.get("mirror", False)))
         pin_info = _symbol_pin_info(symbol_item)
         if pin_info:
             center_x = (min(p['local_x'] for p in pin_info.values()) + max(p['local_x'] for p in pin_info.values())) / 2
@@ -3220,6 +3258,10 @@ def build_schematic(
             ET.Element("Item", {"CiID": element_item.get("CiID")})
         )
 
+    unknown_waypoint_nets = set(wire_waypoints) - set(connections)
+    if unknown_waypoint_nets:
+        raise ValueError(f"wire waypoints reference unknown or unconnected nets: {sorted(unknown_waypoint_nets)}")
+
     for name, conns in connections.items():
         if len(conns) < 2:
             continue
@@ -3262,7 +3304,17 @@ def build_schematic(
             _clear(points)
             occupied = [segment for other, paths in net_wires.items() if other != name
                         for path in paths for segment in zip(path, path[1:])]
-            path = route_pins(start, end, routing_obstacles, occupied)
+            manual = wire_waypoints.get(name)
+            if manual is not None:
+                path = [(float(start["x"]), float(start["y"])), *manual, (float(end["x"]), float(end["y"]))]
+                if len(path) < 2 or any(
+                    (abs(a[0] - b[0]) > 0.01 and abs(a[1] - b[1]) > 0.01)
+                    or (abs(a[0] - b[0]) <= 0.01 and abs(a[1] - b[1]) <= 0.01)
+                    for a, b in zip(path, path[1:])
+                ):
+                    raise ValueError(f"wire waypoints for net {name!r} must form non-degenerate orthogonal segments")
+            else:
+                path = route_pins(start, end, routing_obstacles, occupied)
             for px, py in path:
                 points.append(ET.Element("Item", {"X": f"{px:g}", "Y": f"{py:g}"}))
             modifier = wire.find("./ElectricalObject/ModifierInfo/Element")
@@ -3285,6 +3337,8 @@ def build_schematic(
             first, second = conns
             add_wire(first, second, second["extpin_id"])
         else:
+            if name in wire_waypoints:
+                raise ValueError(f"explicit waypoints currently require a two-terminal net: {name}")
             jx = sum(c["x"] for c in conns) / len(conns)
             jy = sum(c["y"] for c in conns) / len(conns)
             occupied = [segment for paths in net_wires.values() for path in paths
@@ -3441,8 +3495,6 @@ def build_schematic(
     if ce_profile or rectifier_profile:
         for probe in root.iter("CIITProbeExtComponent"):
             probe.set("Hidden", "1")
-    write_native_xml(tree, output_path)
-
     if parsed.subcircuit_expansion_failures:
         editable_model_status = (
             "partial" if parsed.expanded_subcircuits else "carrier_only"
@@ -3459,6 +3511,11 @@ def build_schematic(
         pin_exits={net: [((c['x'],c['y']), pin_escape(c,placements)) for c in pins]
                    for net,pins in connections.items()},
     )
+    if component_placements or wire_waypoints:
+        errors = [item for item in layout_validation.get("findings", []) if item.get("severity") == "error"]
+        if errors:
+            raise ValueError(f"explicit schematic geometry failed validation: {errors[:8]}")
+    write_native_xml(tree, output_path)
 
     return {
         "xml": str(output_path),

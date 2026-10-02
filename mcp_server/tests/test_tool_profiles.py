@@ -35,7 +35,10 @@ class ToolProfileTest(unittest.TestCase):
             )
         }
         self.assertEqual(decorated, ALL_TOOL_NAMES)
-        self.assertEqual(len(ALL_TOOL_NAMES), 107)
+        self.assertEqual(len(ALL_TOOL_NAMES), 110)
+        self.assertIn("validate_circuit", ALL_TOOL_NAMES)
+        self.assertIn("approve_circuit_spec", ALL_TOOL_NAMES)
+        self.assertIn("create_circuit", ALL_TOOL_NAMES)
         self.assertIn("prepare_netlist_draft", ALL_TOOL_NAMES)
         self.assertIn("resolve_component_requirements", ALL_TOOL_NAMES)
         self.assertIn("approve_component_resolution", ALL_TOOL_NAMES)

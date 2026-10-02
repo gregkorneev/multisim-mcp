@@ -1,0 +1,20 @@
+{
+  "schema_version": "0.1",
+  "title": "NPN common-emitter stage",
+  "components": [
+    {"id": "V1", "type": "dc_voltage_source", "value": "5 V"},
+    {"id": "V2", "type": "dc_voltage_source", "value": "0.7 V"},
+    {"id": "R1", "type": "resistor", "value": "1 kOhm"},
+    {"id": "R2", "type": "resistor", "value": "10 kOhm"},
+    {"id": "Q1", "type": "npn_bjt", "model": "2N3904"},
+    {"id": "GND", "type": "ground"}
+  ],
+  "nets": [
+    {"id": "vcc", "terminals": ["V1.positive", "R1.1"]},
+    {"id": "collector", "terminals": ["R1.2", "Q1.collector"]},
+    {"id": "drive", "terminals": ["V2.positive", "R2.1"]},
+    {"id": "base", "terminals": ["R2.2", "Q1.base"]},
+    {"id": "0", "terminals": ["V1.negative", "V2.negative", "Q1.emitter", "GND.0"]}
+  ],
+  "uncertainties": []
+}

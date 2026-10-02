@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="660" height="380" viewBox="0 0 660 380">
+  <rect width="100%" height="100%" fill="white"/>
+  <g fill="none" stroke="#111" stroke-width="3" stroke-linecap="square" stroke-linejoin="round">
+    <path d="M100 80 V300 H545 M100 80 H250 V130 M100 80 H440 V145"/>
+    <path d="M235 130 l15 -12 15 24 15 -24 15 24 15 -24 15 12"/>
+    <path d="M425 145 l15 -12 15 24 15 -24 15 24 15 -24 15 12"/>
+    <path d="M100 300 H300 M400 180 V235 M400 270 V300"/>
+    <path d="M300 170 L400 200 L300 230 Z M300 200 H250 V220 M400 200 H455"/>
+    <path d="M392 230 l14 6 -13 7"/>
+    <path d="M85 300 H115 M90 310 H110 M96 320 H104"/>
+    <circle cx="400" cy="200" r="4" fill="#111"/>
+  </g>
+  <g fill="#111" font-family="sans-serif" font-size="17">
+    <text x="45" y="65">V1 5 V</text><text x="40" y="285">GND</text>
+    <text x="270" y="106">R1 1 kΩ</text><text x="466" y="108">R2 10 kΩ</text>
+    <text x="345" y="260">Q1 2N3904</text><text x="180" y="213">V2 0.7 V</text>
+    <text x="458" y="185">collector</text><text x="315" y="185">base</text>
+  </g>
+</svg>

@@ -104,6 +104,8 @@ class EdaBackendTest(unittest.TestCase):
                     design=self._design(),
                     output_directory=str(root / "schematic"),
                     render_image=True,
+                    component_placements={"R1": {"x": 100, "y": 120, "rotation": 90}},
+                    wire_waypoints={"in": ((60.0, 90.0),)},
                 )
             )
             simulation = backend.simulate(
@@ -115,6 +117,10 @@ class EdaBackendTest(unittest.TestCase):
             )
 
         self.assertTrue(schematic.success)
+        schematic_call = calls["schematic"]
+        assert isinstance(schematic_call, dict)
+        self.assertEqual(schematic_call["component_placements"], {"R1": {"x": 100, "y": 120, "rotation": 90}})
+        self.assertEqual(schematic_call["wire_waypoints"], {"in": ((60.0, 90.0),)})
         self.assertEqual(schematic.payload["native_netlist_complete"], True)
         self.assertEqual(
             {item.name for item in schematic.artifacts.artifacts},

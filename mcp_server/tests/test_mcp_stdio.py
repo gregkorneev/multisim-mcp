@@ -20,6 +20,41 @@ from multisim_mcp.tool_profiles import PROFILE_TOOL_NAMES, TOOL_PROFILE_ENV
 
 
 class McpStdioSmokeTest(unittest.IsolatedAsyncioTestCase):
+    async def test_circuitspec_validation_and_approval_are_callable_over_stdio(self) -> None:
+        package_root = Path(multisim_mcp.__file__).resolve().parent.parent
+        environment = get_default_environment()
+        environment["PYTHONPATH"] = os.pathsep.join(
+            dict.fromkeys([str(package_root), *(p for p in sys.path if p)])
+        )
+        params = StdioServerParameters(
+            command=sys.executable, args=["-m", "multisim_mcp.server"], env=environment
+        )
+        spec = json.loads(
+            (package_root.parent / "examples/circuitspec/rc-low-pass.json").read_text()
+        )
+        async with Client(stdio_client(params), mode="2026-07-28") as session:
+            preview_response = await session.call_tool("validate_circuit", {"spec": spec})
+            self.assertFalse(preview_response.is_error)
+            preview = preview_response.structured_content
+            self.assertTrue(preview["ready_to_build"])
+            self.assertIn(".end", preview["spice_netlist"])
+            approval_response = await session.call_tool(
+                "approve_circuit_spec",
+                {
+                    "spec": spec,
+                    "approval": {
+                        "approved": True,
+                        "spec_sha256": preview["spec_sha256"],
+                        "confirm_components": True,
+                        "confirm_topology": True,
+                        "confirm_values": True,
+                    },
+                },
+            )
+            self.assertFalse(approval_response.is_error)
+            self.assertTrue(approval_response.structured_content["ready_for_schematic"])
+            self.assertFalse(approval_response.structured_content["ready_for_simulation"])
+
     async def test_composed_analog_preview_is_callable_over_stdio(self) -> None:
         package_root = Path(multisim_mcp.__file__).resolve().parent.parent
         environment = get_default_environment()
@@ -79,13 +114,16 @@ class McpStdioSmokeTest(unittest.IsolatedAsyncioTestCase):
                 mode
             )
             self.assertEqual(protocol, expected_protocol)
-            self.assertEqual(len(names), 107)
+            self.assertEqual(len(names), 110)
             self.assertEqual(len(prompts), 5)
             self.assertEqual(len(resources), 20)
 
             self.assertIn("runtime_status", names)
             self.assertIn("schematic_component_catalog", names)
             self.assertIn("create_schematic_from_netlist", names)
+            self.assertIn("validate_circuit", names)
+            self.assertIn("approve_circuit_spec", names)
+            self.assertIn("create_circuit", names)
             self.assertIn("run_circuit_experiment", names)
             self.assertIn("submit_circuit_experiment", names)
             self.assertIn("plan_design_options", names)

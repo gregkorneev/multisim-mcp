@@ -16,9 +16,12 @@ if (-not (Get-Command $Python -ErrorAction SilentlyContinue)) {
 }
 
 $Bits = & $Python -c "import struct; print(struct.calcsize('P') * 8)"
+if ($LASTEXITCODE -ne 0) { throw "Unable to run Python: $Python" }
 
 & $Python -m pip install --upgrade pip
+if ($LASTEXITCODE -ne 0) { throw "pip upgrade failed (exit $LASTEXITCODE)." }
 & $Python -m pip install -e .
+if ($LASTEXITCODE -ne 0) { throw "MCP package installation failed (exit $LASTEXITCODE)." }
 
 Write-Host "Installed multisim-mcp with $Bits-bit Python: $Python"
 if ($Bits -ne "32") {

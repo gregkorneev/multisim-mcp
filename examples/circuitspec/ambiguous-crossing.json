@@ -1,0 +1,15 @@
+{
+  "schema_version": "0.1",
+  "title": "Ambiguous wire crossing",
+  "components": [
+    {"id": "R1", "type": "resistor", "value": "10 kOhm"},
+    {"id": "R2", "type": "resistor", "value": "10 kOhm"}
+  ],
+  "nets": [
+    {"id": "left_right", "terminals": ["R1.1", "R1.2"]},
+    {"id": "top_bottom", "terminals": ["R2.1", "R2.2"]}
+  ],
+  "uncertainties": [
+    {"path": "image.crossing_1", "reason": "The crossing has no clearly visible junction dot; ask the user whether the wires connect.", "confidence": 0.42}
+  ]
+}

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import csv
 import functools
+import hashlib
 import json
 import math
 import os
@@ -96,6 +97,12 @@ from multisim_mcp.native_sweep import (
     validate_native_sweep_patch_draft,
 )
 from multisim_mcp.preferred_values import parse_spice_scalar
+from multisim_mcp.circuit_spec import (
+    COMPONENT_REGISTRY,
+    approve_circuit_spec as build_circuit_spec_approval,
+    validate_circuit_spec as build_circuit_spec_preview,
+    validate_circuit_spec_approval,
+)
 from multisim_mcp.natural_engineering import parse_natural_request
 from multisim_mcp.natural_rlc import parse_natural_rlc_request
 from multisim_mcp.natural_opamp import parse_natural_opamp_request
@@ -1328,6 +1335,115 @@ def retry_experiment_job(job_id: str) -> JobSubmission:
     return _job_manager().retry(job_id)
 
 
+@mcp.tool(com_serialized=False)
+def validate_circuit(spec: dict[str, Any]) -> dict[str, Any]:
+    """Validate a Codex-produced CircuitSpec and preview its supported SPICE."""
+    return build_circuit_spec_preview(spec)
+
+
+@mcp.tool(com_serialized=False)
+def approve_circuit_spec(
+    spec: dict[str, Any], approval: dict[str, Any]
+) -> dict[str, Any]:
+    """Bind explicit review of components, topology, and values to one spec."""
+    return build_circuit_spec_approval(spec, approval)
+
+
+@mcp.tool(com_serialized=False)
+def create_circuit(
+    spec: dict[str, Any],
+    approval: dict[str, Any],
+    output_ms14: str,
+    overwrite: bool = False,
+) -> dict[str, Any]:
+    """Create and verify a Multisim project from an approved CircuitSpec."""
+    validated = build_circuit_spec_preview(spec)
+    validate_circuit_spec_approval(spec, approval)
+    if not validated["ready_to_build"]:
+        raise ValueError("CircuitSpec has unresolved visual uncertainties")
+    output_path = Path(output_ms14).expanduser().resolve()
+    if output_path.suffix.lower() != ".ms14":
+        raise ValueError("output_ms14 must end with .ms14")
+    image_path = output_path.with_suffix(".png")
+    evidence_paths = {
+        "spec": output_path.with_suffix(".circuitspec.json"),
+        "netlist": output_path.with_suffix(".circuitspec.cir"),
+        "mapping": output_path.with_suffix(".component-mapping.json"),
+        "validation": output_path.with_suffix(".circuitspec-validation.json"),
+        "manifest": output_path.with_suffix(".circuitspec-manifest.json"),
+    }
+    paths = [output_path, Path(str(output_path) + ".xml"), image_path, *evidence_paths.values()]
+    if not overwrite:
+        existing = [str(path) for path in paths if path.exists()]
+        if existing:
+            raise FileExistsError("Refusing to overwrite existing circuit artifacts: " + ", ".join(existing))
+
+    design = circuit_design_from_spice(validated["spice_netlist"], title=output_path.stem)
+    execution = _eda_application_service().create_schematic(
+        "multisim",
+        SchematicRequest(
+            design=design,
+            output_directory=str(output_path.parent),
+            file_stem=output_path.stem,
+            render_image=True,
+            image_path=str(image_path),
+            open_after_build=True,
+            overwrite=overwrite,
+            component_placements=validated["component_placements"],
+            wire_waypoints=validated["wire_waypoints"],
+        ),
+    )
+    built = _eda_compatibility_result(execution)
+    normalized = validated["normalized_spec"]
+    mapping = [
+        {
+            "id": item["id"],
+            "type": item["type"],
+            "kind": COMPONENT_REGISTRY[item["type"]]["kind"],
+            "terminal_order": list(COMPONENT_REGISTRY[item["type"]]["terminals"]),
+            "native_terminals": dict(COMPONENT_REGISTRY[item["type"]].get("native_terminals", {})),
+            "value": item.get("value"),
+        }
+        for item in normalized["components"]
+    ]
+    payloads = {
+        "spec": normalized,
+        "netlist": validated["spice_netlist"],
+        "mapping": {"schema_version": 1, "components": mapping},
+        "validation": {
+            "spec_sha256": validated["spec_sha256"],
+            "topology_verification": built.get("verification", {}),
+            "layout_validation": built.get("layout_validation", {}),
+            "build": built.get("build", {}),
+        },
+    }
+    written: dict[str, str] = {}
+    for key, payload in payloads.items():
+        path = evidence_paths[key]
+        rendered = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
+        path.write_text(rendered + ("" if isinstance(payload, str) else "\n"), encoding="utf-8")
+        written[key] = str(path)
+    artifact_files = [output_path, Path(str(output_path) + ".xml"), image_path, *[Path(p) for p in written.values()]]
+    manifest = {
+        "schema_version": 1,
+        "spec_sha256": validated["spec_sha256"],
+        "artifacts": {
+            path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in artifact_files
+            if path.is_file()
+        },
+    }
+    evidence_paths["manifest"].write_text(json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return {
+        **built,
+        "circuit_spec": {"path": str(evidence_paths["spec"]), "sha256": validated["spec_sha256"]},
+        "component_mapping": str(evidence_paths["mapping"]),
+        "source_netlist": str(evidence_paths["netlist"]),
+        "circuit_spec_validation": str(evidence_paths["validation"]),
+        "reproducibility_manifest": str(evidence_paths["manifest"]),
+    }
+
+
 @mcp.tool()
 def schematic_component_catalog() -> dict:
     """List native component families available to the schematic generator."""
@@ -2104,6 +2220,8 @@ def _create_schematic_impl(
     open_after_build: bool,
     image_path: str | None,
     overwrite: bool,
+    component_placements: dict[str, dict[str, Any]] | None = None,
+    wire_waypoints: dict[str, list[tuple[float, float]]] | None = None,
 ) -> dict:
     validate_spice_netlist(netlist)
     parsed = parse_netlist(netlist)
@@ -2138,6 +2256,8 @@ def _create_schematic_impl(
         netlist,
         xml_path,
         probe_nets=selected_probes,
+        component_placements=component_placements,
+        wire_waypoints=wire_waypoints,
     )
     # Persist the deterministic geometry preflight next to the editable
     # schematic so later import/repair steps can inspect the exact build.

@@ -1,0 +1,24 @@
+{
+  "schema_version": "0.1",
+  "title": "RC low-pass",
+  "units": {"length": "multisim-grid", "value": "SI"},
+  "components": [
+    {"id": "V1", "type": "dc_voltage_source", "value": "5 V"},
+    {"id": "R1", "type": "resistor", "value": "1 kOhm"},
+    {"id": "C1", "type": "capacitor", "value": "100 nF"},
+    {"id": "GND", "type": "ground"}
+  ],
+  "nets": [
+    {"id": "vin", "terminals": ["V1.positive", "R1.1"]},
+    {"id": "vout", "terminals": ["R1.2", "C1.1"]},
+    {"id": "0", "terminals": ["V1.negative", "C1.2", "GND.0"]}
+  ],
+  "connections": [
+    {"net": "vin", "from": "V1.positive", "to": "R1.1"},
+    {"net": "vout", "from": "R1.2", "to": "C1.1"},
+    {"net": "0", "from": "C1.2", "to": "GND.0"}
+  ],
+  "junctions": [],
+  "wire_waypoints": [],
+  "uncertainties": []
+}

@@ -75,6 +75,31 @@ identity, and a workbench result refresh should match its path, integrity, and a
 compiled/spec digests before treating it as the current run. Legacy or direct experiments without
 that identity remain evidence-only.
 
+## Build from an image attached in Codex
+
+When the user attaches a hand-drawn circuit image, inspect it in Codex and
+transcribe only what is visible. Do not send image bytes or an image URL to
+Multisim MCP. Produce `CircuitSpec` version `0.1` with component IDs, types,
+values, terminal membership in named nets, and an `uncertainties` entry for any
+unreadable value or ambiguous junction. The initial MCP contract supports
+resistors, capacitors, inductors, DC voltage/current sources, and ground.
+
+Call `validate_circuit` with the complete spec. If validation fails, fix the
+spec; if `ready_to_build` is false, ask the user to resolve each uncertainty
+before continuing. Show the normalized component/value/topology summary and
+wait for explicit approval. Then call `approve_circuit_spec` with the returned
+`spec_sha256` and all four confirmations set to true only after that review, and
+call `create_circuit` with the unchanged spec, approval artifact, and a new
+`.ms14` path. The tool verifies the opened project and returns the schematic
+image, topology evidence, source spec, SPICE netlist, component mapping, and
+hash manifest. This workflow creates a schematic; it does not authorize a
+simulation.
+
+Treat an unreadable label such as `10k?` as unknown and ask. Treat a wire
+crossing without a visible junction mark as ambiguous; do not join the nets
+until the user confirms. Report unsupported components and stop rather than
+substituting a different part or topology.
+
 ## 1. Clarify the design
 
 Collect from the user:

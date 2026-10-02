@@ -1,5 +1,7 @@
 # Multisim MCP + Skills
 
+[Project wiki / База знаний](docs/wiki/Home.md)
+
 [![Glama MCP server score](https://glama.ai/mcp/servers/yxy050208/multisim-mcp/badges/score.svg)](https://glama.ai/mcp/servers/yxy050208/multisim-mcp)
 [![DeepSeek Harness npm bundle](https://img.shields.io/npm/v/multisim-mcp-dsh-plugin.svg?label=dsh%20plugin)](https://www.npmjs.com/package/multisim-mcp-dsh-plugin)
 
